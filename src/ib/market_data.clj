@@ -19,18 +19,19 @@
   it works without a live data subscription.
 
   Options:
-  - `:sec-type`      default \"STK\"
-  - `:exchange`      default \"SMART\"
-  - `:primary-exch`  primary exchange (e.g. `\"ISLAND\"` for NASDAQ); recommended when `:exchange` is `\"SMART\"`
-  - `:currency`      default \"USD\"
-  - `:timeout-ms`    default 8000
+  - `:con-id`      IB contract id (preferred; use instead of symbol when known)
+  - `:sec-type`    default \"STK\"
+  - `:exchange`    default \"SMART\"
+  - `:primary-exch` primary exchange for SMART routing (e.g. \"NYSE\")
+  - `:currency`    default \"USD\"
+  - `:timeout-ms`  default 8000
 
   Returns a channel delivering one map:
-  - success: `{:ok true  :symbol ... :bid ... :ask ... :last ... :high ... :low ... :close ...}`
+  - success: `{:ok true  :symbol ... :ticks {:bid ... :ask ... :last ...}}`
   - error:   `{:ok false :error :timeout/:ib-error/:stream-closed ... }`"
   ([conn symbol]
    (market-data-snapshot! conn symbol {}))
-  ([conn symbol {:keys [sec-type exchange primary-exch currency timeout-ms con-id]
+  ([conn symbol {:keys [con-id sec-type exchange primary-exch currency timeout-ms]
                  :or {sec-type "STK" exchange "SMART" currency "USD" timeout-ms 8000}}]
    (let [rid        (next-req-id!)
          sub-ch     (client/subscribe-events! conn {:buffer-size 64})
@@ -40,14 +41,14 @@
        (client/req-market-data-type! conn 4)
        (catch Throwable _ nil))
      (let [req-err (try
-                     (client/req-mkt-data! conn {:req-id   rid
-                                                 :symbol      symbol
-                                                 :sec-type    sec-type
-                                                 :exchange    exchange
+                     (client/req-mkt-data! conn {:req-id       rid
+                                                 :symbol       symbol
+                                                 :con-id       con-id
+                                                 :sec-type     sec-type
+                                                 :exchange     exchange
                                                  :primary-exch primary-exch
-                                                 :currency    currency
-                                                 :con-id      con-id
-                                                 :snapshot    true})
+                                                 :currency     currency
+                                                 :snapshot     true})
                      nil
                      (catch Throwable t t))]
        (if req-err
