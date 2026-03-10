@@ -113,6 +113,18 @@
     (catch Throwable _
       nil)))
 
+(defn- try-field [obj field-name]
+  (try
+    (let [field (loop [c (class obj)]
+                  (when c
+                    (or (try (.getDeclaredField c field-name)
+                             (catch NoSuchFieldException _ nil))
+                        (recur (.getSuperclass c)))))]
+      (when field
+        (.setAccessible field true)
+        (.get field obj)))
+    (catch Throwable _ nil)))
+
 (defn- pick-value [m candidates]
   (some (fn [k]
           (let [v (get m k ::missing)]
@@ -169,68 +181,82 @@
     :else
     {:conId (parse-long-safe
              (or (try-zero-arg-method contract "conid")
-                 (try-zero-arg-method contract "conId")))
+                 (try-zero-arg-method contract "conId")
+                 (try-field contract "m_conid")))
      :symbol (some-> (or (try-zero-arg-method contract "symbol")
-                         (try-zero-arg-method contract "localSymbol"))
+                         (try-zero-arg-method contract "localSymbol")
+                         (try-field contract "m_symbol")
+                         (try-field contract "m_localSymbol"))
                      str)
      :secType (some-> (or (try-zero-arg-method contract "secType")
-                          (try-zero-arg-method contract "getSecType"))
+                          (try-zero-arg-method contract "getSecType")
+                          (try-field contract "m_secType"))
                       str)
      :currency (some-> (or (try-zero-arg-method contract "currency")
-                           (try-zero-arg-method contract "getCurrency"))
+                           (try-zero-arg-method contract "getCurrency")
+                           (try-field contract "m_currency"))
                        str)
      :exchange (some-> (or (try-zero-arg-method contract "exchange")
                            (try-zero-arg-method contract "primaryExch")
-                           (try-zero-arg-method contract "getExchange"))
+                           (try-zero-arg-method contract "getExchange")
+                           (try-field contract "m_exchange")
+                           (try-field contract "m_primaryExch"))
                        str)}))
 
-(defn- order-field [order key-candidates method-candidates]
+(defn- order-field [order key-candidates method-candidates field-candidates]
   (cond
     (map? order) (pick-value order key-candidates)
-    :else (some #(try-zero-arg-method order %) method-candidates)))
+    :else (or (some #(try-zero-arg-method order %) method-candidates)
+              (some #(try-field order %) field-candidates))))
 
 (defn- order->map [order]
-  {:action (some-> (order-field order [:action "action"] ["action"]) str)
-   :orderType (some-> (order-field order [:orderType :order-type "orderType"] ["orderType"]) str)
+  {:action (some-> (order-field order [:action "action"] ["action"] ["m_action"]) str)
+   :orderType (some-> (order-field order [:orderType :order-type "orderType"] ["orderType"] ["m_orderType"]) str)
    :totalQuantity (parse-double-safe
                    (order-field order
                                 [:totalQuantity :total-quantity "totalQuantity"]
-                                ["totalQuantity"]))
+                                ["totalQuantity"]
+                                ["m_totalQuantity"]))
    :lmtPrice (parse-double-safe
               (order-field order
                            [:lmtPrice :limit-price "lmtPrice"]
-                           ["lmtPrice"]))
+                           ["lmtPrice"]
+                           ["m_lmtPrice"]))
    :auxPrice (parse-double-safe
               (order-field order
                            [:auxPrice :aux-price "auxPrice"]
-                           ["auxPrice"]))
-   :tif (some-> (order-field order [:tif "tif"] ["tif"]) str)
+                           ["auxPrice"]
+                           ["m_auxPrice"]))
+   :tif (some-> (order-field order [:tif "tif"] ["tif"] ["m_tif"]) str)
    :transmit (parse-boolean-safe
-              (order-field order [:transmit "transmit"] ["transmit"]))
+              (order-field order [:transmit "transmit"] ["transmit"] ["m_transmit"]))
    :parentId (parse-long-safe
-              (order-field order [:parentId :parent-id "parentId"] ["parentId"]))})
+              (order-field order [:parentId :parent-id "parentId"] ["parentId"] ["m_parentId"]))})
 
 (defn- order-perm-id [order]
   (parse-long-safe
-   (order-field order [:permId :perm-id "permId"] ["permId"])))
+   (order-field order [:permId :perm-id "permId"] ["permId"] ["m_permId"])))
 
 (defn- order-account [order]
-  (some-> (order-field order [:account "account"] ["account"]) str))
+  (some-> (order-field order [:account "account"] ["account"] ["m_account"]) str))
 
-(defn- order-state-field [order-state key-candidates method-candidates]
+(defn- order-state-field [order-state key-candidates method-candidates field-candidates]
   (cond
     (map? order-state) (pick-value order-state key-candidates)
-    :else (some #(try-zero-arg-method order-state %) method-candidates)))
+    :else (or (some #(try-zero-arg-method order-state %) method-candidates)
+              (some #(try-field order-state %) field-candidates))))
 
 (defn- order-state->map [order-state]
-  {:status (some-> (order-state-field order-state [:status "status"] ["status"]) str)
+  {:status (some-> (order-state-field order-state [:status "status"] ["status"] ["m_status"]) str)
    :commission (parse-double-safe
                 (order-state-field order-state
                                    [:commission "commission"]
-                                   ["commission"]))
+                                   ["commission"]
+                                   ["m_commission"]))
    :warningText (some-> (order-state-field order-state
                                            [:warningText :warning-text "warningText"]
-                                           ["warningText"])
+                                           ["warningText"]
+                                           ["m_warningText"])
                         str)})
 
 (defn position->event
@@ -436,8 +462,9 @@
      (base-event :ib/tick-snapshot-end {:status :ok :request-id rid})
      {:req-id rid})))
 
-(defn- contract-details-field [cd method-names]
-  (some #(try-zero-arg-method cd %) method-names))
+(defn- contract-details-field [cd method-names field-names]
+  (or (some #(try-zero-arg-method cd %) method-names)
+      (some #(try-field cd %) field-names)))
 
 (defn contract-details->map
   "Normalize IB ContractDetails Java object into a stable map.
@@ -448,13 +475,13 @@
   [cd]
   (when cd
     (let [inner (or (try-zero-arg-method cd "contract")
-                    (try-zero-arg-method cd "m_contract"))]
+                    (try-field cd "m_contract"))]
       {:contract      (when inner (contract->map inner))
-       :long-name     (some-> (contract-details-field cd ["longName" "getLongName"]) str)
-       :min-tick      (parse-double-safe (contract-details-field cd ["minTick" "getMinTick"]))
-       :trading-hours (some-> (contract-details-field cd ["tradingHours" "getTradingHours"]) str)
-       :liquid-hours  (some-> (contract-details-field cd ["liquidHours" "getLiquidHours"]) str)
-       :time-zone-id  (some-> (contract-details-field cd ["timeZoneId" "getTimeZoneId"]) str)})))
+       :long-name     (some-> (contract-details-field cd ["longName" "getLongName"] ["m_longName"]) str)
+       :min-tick      (parse-double-safe (contract-details-field cd ["minTick" "getMinTick"] ["m_minTick"]))
+       :trading-hours (some-> (contract-details-field cd ["tradingHours" "getTradingHours"] ["m_tradingHours"]) str)
+       :liquid-hours  (some-> (contract-details-field cd ["liquidHours" "getLiquidHours"] ["m_liquidHours"]) str)
+       :time-zone-id  (some-> (contract-details-field cd ["timeZoneId" "getTimeZoneId"] ["m_timeZoneId"]) str)})))
 
 (defn contract-details->event
   "Build normalized `:ib/contract-details` event from IB `contractDetails` callback."

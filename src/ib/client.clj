@@ -176,12 +176,12 @@
     (let [decimal-class (resolve-class "com.ib.client.Decimal")]
       (if decimal-class
         (try
-          (set-field! order-obj "totalQuantity"
+          (set-field! order-obj "m_totalQuantity"
                       (clojure.lang.Reflector/invokeStaticMethod
                        decimal-class "get" (to-array [(double qty)])))
           (catch Throwable _
-            (set-field! order-obj "totalQuantity" (double qty))))
-        (set-field! order-obj "totalQuantity" (double qty))))))
+            (set-field! order-obj "m_totalQuantity" (double qty))))
+        (set-field! order-obj "m_totalQuantity" (double qty))))))
 
 (defn- map->contract
   "Instantiate a `com.ib.client.Contract` from a kebab-case map.
@@ -205,14 +205,14 @@
   [{:keys [action order-type total-quantity lmt-price aux-price tif transmit parent-id]
     :or {tif "DAY" transmit true}}]
   (let [o (new-instance (resolve-class "com.ib.client.Order") [])]
-    (set-field! o "action"    (some-> action str str/upper-case))
-    (set-field! o "orderType" (some-> order-type str str/upper-case))
+    (set-field! o "m_action"    (some-> action str str/upper-case))
+    (set-field! o "m_orderType" (some-> order-type str str/upper-case))
     (set-quantity! o total-quantity)
-    (when lmt-price  (set-field! o "lmtPrice"  (double lmt-price)))
-    (when aux-price  (set-field! o "auxPrice"   (double aux-price)))
-    (set-field! o "tif"      (str tif))
-    (set-field! o "transmit" (boolean transmit))
-    (when parent-id  (set-field! o "parentId"   (int (long parent-id))))
+    (when lmt-price  (set-field! o "m_lmtPrice"  (double lmt-price)))
+    (when aux-price  (set-field! o "m_auxPrice"   (double aux-price)))
+    (set-field! o "m_tif"      (str tif))
+    (set-field! o "m_transmit" (boolean transmit))
+    (when parent-id  (set-field! o "m_parentId"   (int (long parent-id))))
     o))
 
 (defn- create-wrapper-proxy [publish! request-registry next-order-id-atom]
