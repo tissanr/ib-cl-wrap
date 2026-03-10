@@ -74,7 +74,10 @@
 
                    (and (= :ib/tick-snapshot-end (:type val))
                         (= rid (:req-id val)))
-                   (do (client/cancel-mkt-data! conn rid)
+                   ;; IB auto-cancels snapshot subscriptions after tickSnapshotEnd,
+                   ;; so cancelMktData here is redundant and causes a harmless
+                   ;; "Can't find EId" warning. Swallow the error.
+                   (do (try (client/cancel-mkt-data! conn rid) (catch Throwable _ nil))
                        {:ok true :symbol symbol :ticks ticks})
 
                    (and (= :ib/error (:type val))
@@ -97,4 +100,77 @@
                        (assoc ticks (:field-key val) (:price val))
                        ticks)]
                  (recur new-ticks)))))))
+     out)))
+
+(defn contract-details-snapshot!
+  "Request contract details for one contract and return the first result.
+
+  Options:
+  - `:sec-type`   default `\"STK\"`
+  - `:exchange`   default `\"SMART\"`
+  - `:currency`   default `\"USD\"`
+  - `:timeout-ms` default 8000
+
+  Returns a channel delivering one map:
+  - success: `{:ok true  :symbol ... :details {:con-id ... :primary-exch ... :exchange ... ...}}`
+  - error:   `{:ok false :error :timeout/:ib-error/:no-results/:stream-closed ... }`"
+  ([conn symbol]
+   (contract-details-snapshot! conn symbol {}))
+  ([conn symbol {:keys [sec-type exchange currency timeout-ms]
+                 :or {sec-type "STK" exchange "SMART" currency "USD" timeout-ms 8000}}]
+   (let [rid        (next-req-id!)
+         sub-ch     (client/subscribe-events! conn {:buffer-size 64})
+         out        (async/chan 1)
+         timeout-ch (async/timeout timeout-ms)]
+     (let [req-err (try
+                     (client/req-contract-details! conn {:req-id   rid
+                                                         :symbol   symbol
+                                                         :sec-type sec-type
+                                                         :exchange exchange
+                                                         :currency currency})
+                     nil
+                     (catch Throwable t t))]
+       (if req-err
+         (do
+           (async/put! out {:ok false :error :request-failed
+                            :symbol symbol :message (.getMessage req-err)})
+           (async/close! out)
+           (client/unsubscribe-events! conn sub-ch)
+           (async/close! sub-ch))
+         (async/go-loop [results []]
+           (let [[val port] (async/alts! [sub-ch timeout-ch])
+                 done-result
+                 (cond
+                   (= port timeout-ch)
+                   (if (seq results)
+                     {:ok true :symbol symbol :details (first results)}
+                     {:ok false :error :timeout :symbol symbol
+                      :message "No contract details received before timeout"})
+
+                   (nil? val)
+                   {:ok false :error :stream-closed :symbol symbol}
+
+                   (and (= :ib/contract-details-end (:type val))
+                        (= rid (:req-id val)))
+                   (if (seq results)
+                     {:ok true :symbol symbol :details (first results)}
+                     {:ok false :error :no-results :symbol symbol
+                      :message "contractDetailsEnd received with no prior results"})
+
+                   (and (= :ib/error (:type val))
+                        (= rid (:request-id val)))
+                   {:ok false :error :ib-error :symbol symbol
+                    :message (:message val) :code (:code val)}
+
+                   :else nil)]
+             (if done-result
+               (do
+                 (async/>! out done-result)
+                 (async/close! out)
+                 (client/unsubscribe-events! conn sub-ch)
+                 (async/close! sub-ch))
+               (recur (if (and (= :ib/contract-details (:type val))
+                               (= rid (:req-id val)))
+                        (conj results val)
+                        results)))))))
      out)))
