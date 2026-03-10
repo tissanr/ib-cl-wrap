@@ -698,6 +698,7 @@
   - `:symbol`                 ticker symbol string
   - `:sec-type`               default `\"STK\"`
   - `:exchange`               default `\"SMART\"`
+  - `:primary-exch`           primary exchange (e.g. `\"ISLAND\"` for NASDAQ); recommended when `:exchange` is `\"SMART\"`
   - `:currency`               default `\"USD\"`
   - `:generic-tick-list`      default `\"\"`
   - `:snapshot`               boolean, default `true`
@@ -706,7 +707,7 @@
   Returns `true`. Listen on the event stream for `:ib/tick-price` and
   `:ib/tick-snapshot-end` events tagged with the same `:req-id`."
   [{:keys [client]}
-   {:keys [req-id symbol sec-type exchange currency generic-tick-list snapshot regulatory-snapshot]
+   {:keys [req-id symbol sec-type exchange primary-exch currency generic-tick-list snapshot regulatory-snapshot]
     :or {sec-type "STK" exchange "SMART" currency "USD"
          generic-tick-list "" snapshot true regulatory-snapshot false}}]
   (when-not (some-> client deref)
@@ -714,7 +715,8 @@
   (when-not (integer? req-id)
     (throw (ex-info "req-mkt-data! requires integer :req-id" {:req-id req-id})))
   (let [contract (map->contract {:symbol symbol :sec-type sec-type
-                                 :exchange exchange :currency currency})]
+                                 :exchange exchange :primary-exch primary-exch
+                                 :currency currency})]
     (try
       (invoke-method @client "reqMktData" (int req-id) contract
                      (str generic-tick-list) (boolean snapshot)
