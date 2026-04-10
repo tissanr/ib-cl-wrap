@@ -57,12 +57,19 @@ When this phase ships, communicate:
 - whether runtime behavior changed or only instrumentation/test behavior
 - concrete examples of previously tolerated invalid calls that are now rejected
 
+Recommended artifacts:
+
+- `CHANGELOG.md`
+- `docs/downstream-migration.md`
+- release notes
+
 ## Deliverables
 
 - stronger `clojure.spec` coverage for public APIs
 - compatibility tests that fail on accidental public API changes
 - result-shape tests across all snapshot helpers
 - explicit deprecation tests where needed
+- compatibility checks for declared IB API jar support where practical
 
 ## Benefits
 

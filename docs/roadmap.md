@@ -29,6 +29,12 @@ The order is intentional:
 - Phase 4 improves runtime behavior and observability around the stabilized
   contract.
 
+Important boundary:
+
+- Phase 1 freezes which APIs, namespaces, and event families are public.
+- Phase 2 may still change canonical result shapes, naming, and behavior within
+  that public surface before those details are treated as fully locked.
+
 Doing these out of order would create churn. For example, hardening reconnect
 or overflow behavior before the public contract is frozen would increase the
 chance of stabilizing the wrong behavior.
@@ -139,6 +145,32 @@ Consumers should treat the phases differently:
   - Downstream projects should confirm reconnect and diagnostic expectations in
     integration environments.
 
+## Versioning Policy Ownership
+
+Phase 1 must define the project versioning policy.
+
+That policy should answer:
+
+- whether the project remains in `0.x` during stabilization
+- whether semantic versioning is the governing policy
+- what conditions trigger `1.0`
+- how deprecations are handled across releases
+
+Until that exists, references to "breaking release" and "release candidate"
+should be read as planning terms rather than a final release contract.
+
+## IB API Compatibility Ownership
+
+IB Java API jar compatibility is a cross-cutting concern and should be declared
+in Phase 1, then enforced and hardened in later phases.
+
+That work should define:
+
+- which IB API jar versions are supported
+- whether reflective compatibility across jar variants is part of the stable
+  support promise
+- where jar compatibility expectations are tested
+
 ## Release Guidance
 
 To make downstream adaptation manageable:
@@ -151,6 +183,26 @@ To make downstream adaptation manageable:
   enforcement rejects previously tolerated usage.
 - Phase 4 is usually a minor release, unless operational semantics change in a
   way consumers must handle differently.
+
+## Communication Artifacts
+
+Each phase should publish user-facing changes through explicit artifacts.
+
+Recommended artifacts:
+
+- `CHANGELOG.md`
+  - authoritative release summary of user-visible changes
+- `docs/downstream-migration.md`
+  - concrete migration guidance for downstream integrators
+- release notes
+  - concise packaging of upgrade impact and highlights
+
+Phase 2 should not ship without a migration artifact.
+
+Current artifacts:
+
+- [Changelog](/Users/stephan/Syncthing/dev/codex/ib-cl-wrap/CHANGELOG.md)
+- [Downstream Migration Guide](/Users/stephan/Syncthing/dev/codex/ib-cl-wrap/docs/downstream-migration.md)
 
 ## Exit Criteria
 

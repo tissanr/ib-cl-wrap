@@ -13,6 +13,10 @@ Once the stable surface is declared, the next risk is inconsistency inside that
 surface. Ambiguity makes stable APIs expensive because every inconsistency turns
 into either user confusion or permanent maintenance burden.
 
+This phase is where canonical shapes are finalized. Phase 1 defines which APIs
+are public; Phase 2 can still normalize how those public APIs behave before the
+contract is considered fully locked.
+
 ## Main Problems To Address
 
 - multiple snapshot result conventions
@@ -40,6 +44,13 @@ into either user confusion or permanent maintenance burden.
    - Keep compatibility where practical.
    - Mark old patterns in docs and tests.
    - Prefer explicit transition paths over silent divergence.
+
+5. Preserve test coverage during migration.
+   - Migrate or replace tests as canonical APIs are introduced.
+   - Do not leave only deprecated-path tests green while replacement paths have
+     no equivalent coverage.
+   - Keep deprecated and canonical paths both covered during transition windows
+     where both remain supported.
 
 ## Downstream Impact
 
@@ -78,12 +89,19 @@ When this phase ships, publish a migration note that includes:
 - whether the change is required immediately or only before the next major
   release
 
+Recommended artifacts:
+
+- `CHANGELOG.md`
+- `docs/downstream-migration.md`
+- release notes
+
 ## Deliverables
 
 - one canonical snapshot result convention
 - one canonical contract-details snapshot API
 - clarified naming for event/drop diagnostics
 - documented deprecation notes where compatibility is preserved temporarily
+- migrated test coverage for all new canonical APIs
 
 ## Risks
 
@@ -103,3 +121,4 @@ Phase 2 is done when:
 - the codebase is ready for a v1-style release candidate
 - downstream consumers have a documented migration path for every intentional
   incompatibility
+- canonical replacements have passing tests before deprecated paths are removed

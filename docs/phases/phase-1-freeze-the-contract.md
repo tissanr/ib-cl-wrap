@@ -8,6 +8,14 @@ This phase is about making intentional promises. It does not require large
 behavioral changes yet, but it does require choosing what counts as public,
 documented, and versioned.
 
+Important scope limit:
+
+- this phase freezes which APIs are public
+- this phase does not necessarily freeze the final canonical result shapes of
+  every API
+
+Result-shape normalization and ambiguity cleanup belongs to Phase 2.
+
 ## Why This Phase Comes First
 
 The later phases depend on knowing what we are stabilizing.
@@ -25,8 +33,10 @@ This phase should answer the following questions:
 - Which vars are public and supported?
 - Which event types are part of the stable event contract?
 - Which payload keys are guaranteed?
-- Which result shapes are considered canonical?
+- Which result shapes are provisional versus canonical?
 - Which compatibility guarantees apply to future changes?
+- Which IB API jar versions are supported?
+- What versioning policy governs releases?
 
 ## Main Tasks
 
@@ -54,6 +64,22 @@ This phase should answer the following questions:
      breaking changes.
    - Clarify how event schema versions are introduced.
 
+5. Define versioning policy.
+   - Decide whether semantic versioning is the release policy.
+   - Decide what `0.x` means during stabilization.
+   - Define the criteria for `1.0`.
+
+6. Define IB API compatibility policy.
+   - Declare which IB Java API jar versions are supported.
+   - Clarify whether reflective compatibility across jar variants is part of
+     the support promise.
+   - State where jar-version compatibility will be tested.
+
+7. Define documentation authority.
+   - Decide whether `README.md` and `README.en.md` are both authoritative.
+   - If not, declare one source of truth and treat the other as a translation
+     artifact.
+
 ## Downstream Impact
 
 Expected downstream impact:
@@ -77,12 +103,24 @@ When this phase ships, communicate:
 - the exact event types and guaranteed payload keys
 - any APIs that remain available but are no longer considered stable
 - whether any consumer-visible behavior is only documented, not changed
+- whether result-shape normalization is still pending for Phase 2
+- which IB API jar versions are supported
+- which README is authoritative if there is any discrepancy
+
+Recommended artifacts:
+
+- `CHANGELOG.md`
+- `docs/downstream-migration.md`
+- release notes
 
 ## Deliverables
 
 - updated public surface document
 - updated event contract document
 - explicit compatibility policy
+- explicit versioning policy
+- explicit IB API compatibility policy
+- explicit documentation authority policy for `README.md` and `README.en.md`
 - consistent README references to supported namespaces and functions
 
 ## Non-Goals
@@ -102,3 +140,5 @@ Phase 1 is done when:
 - the event schema documentation matches reality
 - experimental or transitional areas are clearly marked
 - downstream consumers have enough information to audit their current usage
+- the project has a written versioning policy
+- the project has a written IB API compatibility statement

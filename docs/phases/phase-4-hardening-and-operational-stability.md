@@ -31,7 +31,10 @@ locking in behavior that may still change.
 
 4. Improve diagnostics.
    - Enrich error contexts where useful.
-   - Make operational states easier to inspect from public APIs.
+   - Make operational states easier to inspect using existing public events and
+     diagnostics where possible.
+   - Add new public inspection APIs only if existing surfaces cannot carry the
+     required information cleanly.
 
 ## Downstream Impact
 
@@ -54,6 +57,12 @@ When this phase ships, communicate:
 - whether any counters or diagnostics changed meaning
 - whether request cleanup timing or failure classification changed
 
+Recommended artifacts:
+
+- `CHANGELOG.md`
+- `docs/downstream-migration.md`
+- release notes
+
 ## Deliverables
 
 - more trustworthy event/drop diagnostics
@@ -65,6 +74,13 @@ When this phase ships, communicate:
 
 - redefining the public contract
 - introducing major new public API concepts unless required for diagnostics
+
+Preferred order for observability changes:
+
+1. enrich existing event payloads where compatible
+2. improve existing counters or diagnostics
+3. add narrowly scoped new public inspection APIs only if the first two are not
+   sufficient
 
 ## Exit Criteria
 
