@@ -370,9 +370,9 @@
         (finally
           (when on-disconnect
             (on-disconnect))))))
-   (.setName "ib-reader-loop")
-   (.setDaemon true)
-   (.start)))
+    (.setName "ib-reader-loop")
+    (.setDaemon true)
+    (.start)))
 
 (declare start-reconnect-loop!)
 
@@ -509,7 +509,7 @@
                            (compare-and-set! reconnecting? false true))
                   (start-reconnect-loop! conn on-disconnect)))]
         (let [reader-thread (start-reader-loop! client-obj signal reader-obj publish!
-                                               (when auto-reconnect? on-disconnect))]
+                                                (when auto-reconnect? on-disconnect))]
           (reset! reader-thread-atom reader-thread)
           (publish! (events/connected->event
                      {:host host

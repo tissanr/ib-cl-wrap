@@ -207,18 +207,18 @@
       (is (thrown? clojure.lang.ExceptionInfo
                    (client/cancel-account-summary! {:client (atom c) :request-registry (atom {})} nil)))))
 
-(deftest request-correlation-helpers-test
-  (let [registry (atom {})
-        conn {:request-registry registry}
-        enrich #'ib.client/enrich-error-event]
-    (client/register-request! conn 99 {:type :account-summary :group "All"})
-    (is (= :account-summary (:type (client/request-context conn 99))))
-    (let [evt (enrich registry {:type :ib/error :id 99 :code 2104 :message "x"})]
-      (is (= 99 (:request-id evt)))
-      (is (= :account-summary (get-in evt [:request :type])))
-      (is (true? (:retryable? evt))))
-    (client/unregister-request! conn 99)
-    (is (nil? (client/request-context conn 99))))))
+  (deftest request-correlation-helpers-test
+    (let [registry (atom {})
+          conn {:request-registry registry}
+          enrich #'ib.client/enrich-error-event]
+      (client/register-request! conn 99 {:type :account-summary :group "All"})
+      (is (= :account-summary (:type (client/request-context conn 99))))
+      (let [evt (enrich registry {:type :ib/error :id 99 :code 2104 :message "x"})]
+        (is (= 99 (:request-id evt)))
+        (is (= :account-summary (get-in evt [:request :type])))
+        (is (true? (:retryable? evt))))
+      (client/unregister-request! conn 99)
+      (is (nil? (client/request-context conn 99))))))
 
 (deftest account-updates-req-cancel-test
   (testing "req-account-updates! subscribes account stream"

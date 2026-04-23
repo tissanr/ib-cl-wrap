@@ -61,7 +61,7 @@
 
 (deftest event-bus-subscribe-and-closed-publish-test
   (let [{:keys [events events-mult dropped-events publish!]} (events/create-event-bus {:buffer-size 2
-                                                                                        :overflow-strategy :sliding})
+                                                                                       :overflow-strategy :sliding})
         sub (events/subscribe! events-mult {:buffer-size 8})]
     (testing "subscribers receive published events"
       (publish! {:type :ib/ping})
