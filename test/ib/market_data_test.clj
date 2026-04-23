@@ -1,6 +1,7 @@
 (ns ib.market-data-test
   (:require [clojure.core.async :as async]
             [clojure.test :refer [deftest is testing]]
+            [ib.contract]
             [ib.market-data :as market-data]))
 
 (deftest delayed-data-notice-test
@@ -45,11 +46,11 @@
                                 :message "Requested market data requires additional subscription for API. Delayed market data is available."
                                 :code 10167})
           (async/>!! events-ch {:type :ib/tick-price
-                                :req-id @rid
+                                :request-id @rid
                                 :field-key :last
                                 :price 179.5})
           (async/>!! events-ch {:type :ib/tick-snapshot-end
-                                :req-id @rid})
+                                :request-id @rid})
           (let [result (async/<!! result-ch)]
             (is (= [4] @market-data-type-calls))
             (is (= {:req-id @rid
@@ -61,7 +62,12 @@
                     :currency "USD"
                     :snapshot true}
                    @request-args))
-            (is (= {:ok true :symbol "AAPL" :ticks {:last 179.5}} result))
+            (is (= {:ok true
+                    :request-id @rid
+                    :req-id @rid
+                    :symbol "AAPL"
+                    :ticks {:last 179.5}}
+                   (select-keys result [:ok :request-id :req-id :symbol :ticks])))
             (is (= [@rid] @cancel-calls))
             (is (true? @subscribe-called?))
             (is (true? @unsubscribe-called?))))))))
@@ -90,8 +96,37 @@
           (let [result (async/<!! result-ch)]
             (is (= {:ok false
                     :error :ib-error
+                    :request-id @rid
+                    :req-id @rid
                     :symbol "AAPL"
                     :message "No market data permissions for NYSE"
                     :code 200}
-                   result))
+                   (select-keys result [:ok :error :request-id :req-id :symbol :message :code])))
             (is (= [@rid] @cancel-calls))))))))
+
+(deftest contract-details-compat-wrapper-test
+  (testing "deprecated market-data wrapper delegates to canonical contract API"
+    (let [result-ch (async/chan 1)]
+      (async/>!! result-ch {:ok true
+                            :request-id 7001
+                            :req-id 7001
+                            :contracts [{:contract {:conId 1 :symbol "AAPL"}}]
+                            :ts 111})
+      (async/close! result-ch)
+      (with-redefs [ib.contract/contract-details-snapshot!
+                    (fn [_ contract-opts opts]
+                      (is (= {:symbol "AAPL"
+                              :sec-type "STK"
+                              :exchange "SMART"
+                              :currency "USD"}
+                             contract-opts))
+                      (is (= {:timeout-ms 8000} opts))
+                      result-ch)]
+        (let [result (async/<!! (market-data/contract-details-snapshot! {} "AAPL"))]
+          (is (= {:ok true
+                  :symbol "AAPL"
+                  :request-id 7001
+                  :req-id 7001
+                  :details {:contract {:conId 1 :symbol "AAPL"}}
+                  :ts 111}
+                 result)))))))

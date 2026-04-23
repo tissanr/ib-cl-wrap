@@ -8,12 +8,19 @@
   "Default timeout for position snapshots."
   5000)
 
+(defn- snapshot-error
+  [error & {:as extra}]
+  (merge {:ok false
+          :error error
+          :ts (events/now-ms)}
+         extra))
+
 (defn positions-snapshot-from-events!
   "Collect all `:ib/position` events until `:ib/position-end` or timeout.
 
   Returns a channel delivering either:
-  - vector of normalized position events
-  - error map (`:type :ib/error`) on timeout / closed stream"
+  - success: `{:ok true :positions [...]}`
+  - error: `{:ok false :error ...}` on timeout / closed stream"
   ([events-ch]
    (positions-snapshot-from-events! events-ch {}))
   ([events-ch {:keys [timeout-ms]
@@ -25,19 +32,15 @@
          (cond
            (= port timeout-ch)
            (do
-             (async/>! out {:type :ib/error
-                            :ts (events/now-ms)
-                            :reason :timeout
-                            :message "Timed out while waiting for :ib/position-end"
-                            :timeout-ms timeout-ms})
+             (async/>! out (snapshot-error :timeout
+                                           :message "Timed out while waiting for :ib/position-end"
+                                           :timeout-ms timeout-ms))
              (async/close! out))
 
            (nil? value)
            (do
-             (async/>! out {:type :ib/error
-                            :ts (events/now-ms)
-                            :reason :event-stream-closed
-                            :message "Event stream closed before :ib/position-end"})
+             (async/>! out (snapshot-error :event-stream-closed
+                                           :message "Event stream closed before :ib/position-end"))
              (async/close! out))
 
            (= :ib/position (:type value))
@@ -45,7 +48,9 @@
 
            (= :ib/position-end (:type value))
            (do
-             (async/>! out positions)
+             (async/>! out {:ok true
+                            :positions positions
+                            :ts (events/now-ms)})
              (async/close! out))
 
            :else
@@ -55,7 +60,7 @@
 (defn positions-snapshot!
   "Request positions and return a channel with snapshot result.
 
-  Result is either vector of position events or an error map.
+  Result is a channel delivering one `{:ok ...}` snapshot envelope.
 
   Options:
   - `:timeout-ms` (default 5000)
@@ -71,11 +76,9 @@
      (try
        (client/req-positions! conn)
        (catch Throwable t
-         (async/put! out {:type :ib/error
-                          :ts (events/now-ms)
-                          :reason :request-failed
-                          :message (.getMessage t)
-                          :raw t})
+         (async/put! out (snapshot-error :request-failed
+                                         :message (.getMessage t)
+                                         :raw t))
          (client/unsubscribe-events! conn sub-ch)
          (async/close! sub-ch)
          (async/close! out)))

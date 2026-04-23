@@ -44,7 +44,7 @@ Typical ports:
 
 ## API Status
 
-Phase 1 is complete.
+Phase 2 is implemented.
 
 Stable for downstream use:
 - `ib.client` connection, event subscription, positions, account-summary,
@@ -78,18 +78,19 @@ on internal keys.
 - `req-open-orders!` - trigger `reqOpenOrders()` (open orders for the current client ID; with clientId 0, manual TWS orders can be bound).
 - `req-all-open-orders!` - trigger `reqAllOpenOrders()` (all open API orders regardless of client ID).
 - `register-request!` / `unregister-request!` / `request-context` - request-correlation helpers.
-- `dropped-event-count` - number of events not enqueued.
+- `dropped-event-total` - canonical diagnostic counter for events not enqueued.
+- `dropped-event-count` - deprecated compatibility alias for `dropped-event-total`.
 - `events-chan` - return shared event channel.
 - `connected?`, `req-market-data-type!`, `req-mkt-data!`, `cancel-mkt-data!`, `req-contract-details!`, `req-ids!`, `next-order-id!`, `place-order!`, `cancel-order!` - available, but still experimental in Phase 1.
 
 ### Namespace `ib.positions`
 
-- `positions-snapshot!` - trigger `reqPositions()`, collect `:ib/position` until `:ib/position-end`, return snapshot via channel.
+- `positions-snapshot!` - trigger `reqPositions()`, collect `:ib/position` until `:ib/position-end`, return `{:ok ...}` snapshot envelope via channel.
 - `positions-snapshot-from-events!` - collector helper for simulated tests.
 
 ### Namespace `ib.account`
 
-- `account-summary-snapshot!` - trigger `reqAccountSummary`, collect `:ib/account-summary` until `:ib/account-summary-end` (for one `req-id`), always cancels subscription.
+- `account-summary-snapshot!` - trigger `reqAccountSummary`, collect `:ib/account-summary` until `:ib/account-summary-end` (for one request), always cancels subscription.
 - `account-summary-snapshot-from-events!` - collector helper for simulated tests.
 - `next-req-id!` - request-id allocator.
 
@@ -106,6 +107,7 @@ on internal keys.
 ### Namespace `ib.market-data`
 
 - `market-data-snapshot!` - available, but still experimental in Phase 1.
+- `contract-details-snapshot!` - deprecated compatibility wrapper; new code should use `ib.contract/contract-details-snapshot!`.
 
 Default balance tags:
 - `NetLiquidation`
@@ -161,6 +163,10 @@ New downstream integrations should treat `:request-id` as the canonical
 request-correlation key. Legacy keys such as `:req-id` remain compatibility
 fields during `0.x`.
 
+Snapshot helpers now use a consistent envelope style:
+- success: `{:ok true ...}`
+- failure: `{:ok false :error ...}`
+
 Versioned event contract: [event-schema-v1.md](docs/event-schema-v1.md)
 
 Account Summary is subscription-based in IB. The snapshot helper actively cancels via `cancelAccountSummary` on success and timeout/error.
@@ -202,15 +208,21 @@ When buffers are full, older events are dropped and newer events are kept. Callb
 
 (async/go
   (let [result (async/<! positions-ch)]
-    (println "Positions:" result)))
+    (if (:ok result)
+      (println "Positions:" (:positions result))
+      (println "Position snapshot error:" result))))
 
 (async/go
   (let [result (async/<! balances-ch)]
-    (println "Balances:" result)))
+    (if (:ok result)
+      (println "Balances:" (:values result))
+      (println "Account summary error:" result))))
 
 (async/go
   (let [result (async/<! open-orders-ch)]
-    (println "Open Orders:" result)))
+    (if (:ok result)
+      (println "Open Orders:" (:orders result))
+      (println "Open orders error:" result))))
 
 (ib/req-account-updates! conn {:account "DU123456"})
 ;; ... later

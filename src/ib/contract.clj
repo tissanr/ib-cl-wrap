@@ -23,7 +23,7 @@
   `:ib/contract-details-end` or timeout.
 
   Returns a channel with one map:
-  - success: `{:ok true :req-id ... :contracts [...]}`
+  - success: `{:ok true :request-id ... :contracts [...]}`
   - error:   `{:ok false :error :timeout/:event-stream-closed/:ib-error ...}`"
   [events-ch {:keys [req-id timeout-ms]
                :or {timeout-ms default-timeout-ms}}]
@@ -36,6 +36,7 @@
           (do
             (async/>! out {:ok false
                            :error :timeout
+                           :request-id req-id
                            :req-id req-id
                            :timeout-ms timeout-ms
                            :ts (events/now-ms)})
@@ -45,6 +46,7 @@
           (do
             (async/>! out {:ok false
                            :error :event-stream-closed
+                           :request-id req-id
                            :req-id req-id
                            :ts (events/now-ms)})
             (async/close! out))
@@ -54,19 +56,21 @@
           (do
             (async/>! out {:ok false
                            :error :ib-error
+                           :request-id req-id
                            :req-id req-id
                            :ib-error value
                            :ts (events/now-ms)})
             (async/close! out))
 
           (and (= :ib/contract-details (:type value))
-               (= req-id (:req-id value)))
+               (= req-id (:request-id value)))
           (recur (conj contracts (:contract-details value)))
 
           (and (= :ib/contract-details-end (:type value))
-               (= req-id (:req-id value)))
+               (= req-id (:request-id value)))
           (do
             (async/>! out {:ok true
+                           :request-id req-id
                            :req-id req-id
                            :contracts contracts
                            :ts (events/now-ms)})
@@ -85,12 +89,12 @@
   - `:sec-type`         default `\"STK\"`
   - `:exchange`         default `\"SMART\"`
   - `:currency`         default `\"USD\"`
-  - `:req-id`           optional explicit request id
+  - `:req-id`           optional explicit request id (canonical result key is `:request-id`)
   - `:timeout-ms`       default 10000
   - `:tap-buffer-size`  default 256
 
   Returns a channel delivering one map:
-  - success: `{:ok true :req-id ... :contracts [{:contract {:conId ...} :long-name ...} ...]}`
+  - success: `{:ok true :request-id ... :contracts [{:contract {:conId ...} :long-name ...} ...]}`
   - error:   `{:ok false :error :timeout/:event-stream-closed/:ib-error/:request-failed ...}`"
   ([conn contract-opts]
    (contract-details-snapshot! conn contract-opts {}))
@@ -111,6 +115,7 @@
        (do
          (async/put! out {:ok false
                           :error :request-failed
+                          :request-id rid
                           :req-id rid
                           :message (.getMessage t)
                           :raw t

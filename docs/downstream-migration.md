@@ -44,12 +44,96 @@ Current Phase 1 downstream actions:
 
 ### Phase 2
 
-Document:
+Current Phase 2 downstream actions:
 
-- old and new result shapes
-- old and new canonical function names
-- deprecated APIs and their replacements
-- migration deadlines if compatibility shims are temporary
+- normalize snapshot callers to expect `{:ok true ...}` / `{:ok false :error ...}` envelopes
+- prefer `:request-id` in snapshot results; keep reading `:req-id` only as a compatibility field during `0.x`
+- migrate contract detail lookups to `ib.contract/contract-details-snapshot!`
+- migrate diagnostic reads from `ib.client/dropped-event-count` to `ib.client/dropped-event-total`
+
+#### Snapshot Result Envelopes
+
+Old behavior:
+- `ib.positions/positions-snapshot!` returned either a raw vector of positions or an `{:type :ib/error ...}` map
+
+New behavior:
+- `ib.positions/positions-snapshot!` now returns `{:ok true :positions [...]}` on success
+- failures now follow the same `{:ok false :error ...}` shape used by the other snapshot helpers
+
+Who is affected:
+- any caller branching on vector-vs-error behavior
+
+Required downstream change:
+- replace checks such as `(vector? result)` and `(:type result)` with `(:ok result)` and the success payload key
+
+Classification:
+- breaking
+
+Release:
+- current `Unreleased`
+
+#### Canonical Request Id In Snapshot Results
+
+Old behavior:
+- account and contract snapshot helpers surfaced `:req-id` as the primary result key
+
+New behavior:
+- account, contract, and market-data snapshot helpers now expose `:request-id` as the canonical key
+- `:req-id` remains present as a compatibility field during `0.x`
+
+Who is affected:
+- callers reading snapshot metadata directly
+
+Required downstream change:
+- switch to `:request-id`
+
+Classification:
+- additive now, breaking later when compatibility fields are removed
+
+Release:
+- current `Unreleased`
+
+#### Contract Details API Consolidation
+
+Old behavior:
+- both `ib.market-data/contract-details-snapshot!` and `ib.contract/contract-details-snapshot!` were callable
+
+New behavior:
+- `ib.contract/contract-details-snapshot!` is the canonical API
+- `ib.market-data/contract-details-snapshot!` remains only as a deprecated compatibility wrapper
+
+Who is affected:
+- callers still resolving contracts through `ib.market-data`
+
+Required downstream change:
+- move imports and call sites to `ib.contract/contract-details-snapshot!`
+
+Classification:
+- deprecated compatibility shim
+
+Release:
+- current `Unreleased`
+
+#### Diagnostic Counter Rename
+
+Old behavior:
+- the public counter name was `ib.client/dropped-event-count`
+
+New behavior:
+- the canonical name is `ib.client/dropped-event-total`
+- `ib.client/dropped-event-count` remains as a deprecated alias
+
+Who is affected:
+- callers reading queue-drop diagnostics
+
+Required downstream change:
+- rename reads to `dropped-event-total`
+
+Classification:
+- deprecated compatibility shim
+
+Release:
+- current `Unreleased`
 
 ### Phase 3
 

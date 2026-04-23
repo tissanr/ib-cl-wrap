@@ -23,10 +23,17 @@ consumers should also consult:
   - [Downstream Migration Guide](/Users/stephan/Syncthing/dev/codex/ib-cl-wrap/docs/downstream-migration.md)
 - Added the Phase 1 compatibility contract:
   - [Compatibility Policy](/Users/stephan/Syncthing/dev/codex/ib-cl-wrap/docs/compatibility.md)
+- Added the canonical diagnostic counter `ib.client/dropped-event-total`.
 
 ### Changed
 
 - Completed Phase 1 on 2026-04-19 and marked Milestone A done in the roadmap.
+- Implemented the Phase 2 API normalization work:
+  - `ib.positions/positions-snapshot!` now uses the canonical `{:ok ...}` envelope
+  - snapshot result metadata now prefers `:request-id` over `:req-id`
+  - `ib.contract/contract-details-snapshot!` is the canonical contract-details API
+  - `ib.market-data/contract-details-snapshot!` remains as a deprecated compatibility wrapper
+  - `ib.client/dropped-event-count` remains as a deprecated alias for `ib.client/dropped-event-total`
 - Declared the stable public API boundary versus experimental public APIs in:
   - [Spec Surface](/Users/stephan/Syncthing/dev/codex/ib-cl-wrap/docs/spec-surface.md)
 - Aligned the documented event list with the currently emitted event families in:

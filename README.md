@@ -44,7 +44,7 @@ In `deps.edn` ist `lib/ibapi.jar` bereits in `:paths` eingetragen. Wenn die JAR 
 
 ## API-Status
 
-Phase 1 ist abgeschlossen.
+Phase 2 ist implementiert.
 
 Stabil fuer Downstream-Nutzung:
 - `ib.client` Verbindung, Event-Subscription, Positions-, Account-Summary-,
@@ -77,19 +77,20 @@ internen Keys voraussetzen.
 - `cancel-account-updates!` - triggert `reqAccountUpdates(false, account)` zum Beenden des Streams.
 - `req-open-orders!` - triggert `reqOpenOrders()` (offene Orders des aktuellen Client IDs; mit ClientId 0 koennen manuelle TWS-Orders gebunden sein).
 - `req-all-open-orders!` - triggert `reqAllOpenOrders()` (alle offenen API-Orders unabhaengig vom Client ID).
-- `register-request!` / `unregister-request!` / `request-context` - Request-Korrelation ueber `req-id` fuer request-bezogene Fehler.
-- `dropped-event-count` - Anzahl nicht enqueueter Events.
+- `register-request!` / `unregister-request!` / `request-context` - Request-Korrelations-Helfer.
+- `dropped-event-total` - kanonischer Diagnosezaehler fuer nicht enqueuete Events.
+- `dropped-event-count` - veralteter Kompatibilitaets-Alias fuer `dropped-event-total`.
 - `events-chan` - gibt den geteilten Event-Channel zurueck.
 - `connected?`, `req-market-data-type!`, `req-mkt-data!`, `cancel-mkt-data!`, `req-contract-details!`, `req-ids!`, `next-order-id!`, `place-order!`, `cancel-order!` - vorhanden, aber in Phase 1 noch experimentell.
 
 ### Namespace `ib.positions`
 
-- `positions-snapshot!` - triggert `reqPositions()`, sammelt `:ib/position` bis `:ib/position-end`, liefert Ergebnis auf Channel.
+- `positions-snapshot!` - triggert `reqPositions()`, sammelt `:ib/position` bis `:ib/position-end` und liefert ein `{:ok ...}`-Snapshot-Ergebnis auf dem Channel.
 - `positions-snapshot-from-events!` - reine Collector-Funktion fuer simulierte Tests.
 
 ### Namespace `ib.account`
 
-- `account-summary-snapshot!` - triggert `reqAccountSummary`, sammelt `:ib/account-summary` bis `:ib/account-summary-end` (fuer eine `req-id`) und cancelt die Subscription immer aktiv.
+- `account-summary-snapshot!` - triggert `reqAccountSummary`, sammelt `:ib/account-summary` bis `:ib/account-summary-end` (fuer eine Anfrage) und cancelt die Subscription immer aktiv.
 - `account-summary-snapshot-from-events!` - Collector fuer simulierte Tests.
 - `next-req-id!` - erzeugt `req-id` fuer Snapshot-Anfragen.
 
@@ -106,6 +107,7 @@ internen Keys voraussetzen.
 ### Namespace `ib.market-data`
 
 - `market-data-snapshot!` - vorhanden, aber in Phase 1 noch experimentell.
+- `contract-details-snapshot!` - veralteter Kompatibilitaets-Wrapper; neuer Code soll `ib.contract/contract-details-snapshot!` verwenden.
 
 Default-Tags fuer Balances:
 - `NetLiquidation`
@@ -160,6 +162,10 @@ IB-Fehler (`:ib/error`) enthalten bei korrelierbaren Requests zusaetzlich:
 Neue Downstream-Integrationen sollen `:request-id` als kanonischen
 Request-Key verwenden. Legacy-Felder wie `:req-id` bleiben waehrend `0.x`
 Kompatibilitaetsfelder.
+
+Snapshot-Helper verwenden jetzt ein einheitliches Envelope-Schema:
+- Erfolg: `{:ok true ...}`
+- Fehler: `{:ok false :error ...}`
 
 Versionierter Event-Contract: [docs/event-schema-v1.md](docs/event-schema-v1.md)
 
@@ -217,9 +223,9 @@ Das bedeutet: Bei vollem Puffer werden aeltere Events verworfen, neuere behalten
 
 (async/go
   (let [result (async/<! snapshot-ch)]
-    (if (= :ib/error (:type result))
-      (println "Positions-Fehler:" result)
-      (println "Positions-Snapshot:" result))))
+    (if (:ok result)
+      (println "Positions-Snapshot:" (:positions result))
+      (println "Positions-Fehler:" result))))
 
 (async/go
   (let [result (async/<! balance-ch)]

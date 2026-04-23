@@ -44,7 +44,7 @@
   `:ib/account-summary-end` or timeout.
 
   Returns a channel with one map:
-  - success: `{:ok true :req-id ... :values {...}}`
+  - success: `{:ok true :request-id ... :values {...}}`
   - error: `{:ok false :error ...}` (with `:retryable?` for IB errors)"
   [events-ch {:keys [req-id timeout-ms]
               :or {timeout-ms default-timeout-ms}}]
@@ -57,6 +57,7 @@
           (do
             (async/>! out {:ok false
                            :error :timeout
+                           :request-id req-id
                            :req-id req-id
                            :timeout-ms timeout-ms
                            :ts (events/now-ms)})
@@ -66,6 +67,7 @@
           (do
             (async/>! out {:ok false
                            :error :event-stream-closed
+                           :request-id req-id
                            :req-id req-id
                            :ts (events/now-ms)})
             (async/close! out))
@@ -74,6 +76,7 @@
           (do
             (async/>! out {:ok false
                            :error :ib-error
+                           :request-id req-id
                            :req-id req-id
                            :ib-error value
                            :retryable? (boolean (or (:retryable? value)
@@ -82,13 +85,14 @@
             (async/close! out))
 
           (and (= :ib/account-summary (:type value))
-               (= req-id (:req-id value)))
+               (= req-id (:request-id value)))
           (recur (add-summary-value values value))
 
           (and (= :ib/account-summary-end (:type value))
-               (= req-id (:req-id value)))
+               (= req-id (:request-id value)))
           (do
             (async/>! out {:ok true
+                           :request-id req-id
                            :req-id req-id
                            :values values
                            :ts (events/now-ms)})
@@ -104,7 +108,7 @@
   Options:
   - `:group` default `All`
   - `:tags` default focused balance tags
-  - `:req-id` optional explicit request id
+  - `:req-id` optional explicit request id (canonical result key is `:request-id`)
   - `:timeout-ms` default 5000
   - `:tap-buffer-size` default 256
 
@@ -133,6 +137,7 @@
        (do
          (async/put! out {:ok false
                           :error :request-failed
+                          :request-id rid
                           :req-id rid
                           :message (.getMessage t)
                           :raw t

@@ -24,11 +24,12 @@ These APIs are the frozen stable public surface for Phase 1.
 - `req-account-summary!` / `cancel-account-summary!` - manage account-summary requests
 - `req-account-updates!` / `cancel-account-updates!` - manage account-updates streaming
 - `register-request!` / `unregister-request!` / `request-context` - request-correlation helpers
-- `dropped-event-count` - diagnostic counter for events the wrapper could not enqueue
+- `dropped-event-total` - canonical diagnostic counter for events the wrapper could not enqueue
+- `dropped-event-count` - deprecated compatibility alias for `dropped-event-total`
 
 ### `ib.positions`
 
-- `positions-snapshot!` - snapshot helper built on the event stream
+- `positions-snapshot!` - snapshot helper built on the event stream using the canonical `{:ok ...}` result envelope
 
 `positions-snapshot-from-events!` remains available as a collector helper for
 tests and simulation, but it is not part of the stable surface.
@@ -90,5 +91,6 @@ into the public surface.
 - `:request-id` is the canonical request-correlation key for normalized events
 - legacy event keys such as `:req-id` and `:id` remain compatibility fields
   during `0.x`, but are not canonical
-- Phase 1 freezes which APIs are public; it does not freeze final canonical
-  result envelopes for every helper
+- snapshot helpers now use `{:ok true ...}` / `{:ok false :error ...}` envelopes
+- `ib.contract/contract-details-snapshot!` is the canonical contract-details API
+- `ib.market-data/contract-details-snapshot!` is deprecated compatibility surface only

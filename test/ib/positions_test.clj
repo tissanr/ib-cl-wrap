@@ -20,17 +20,17 @@
                          :avg-cost 300.0})
       (async/>!! events {:type :ib/position-end})
       (let [result (async/<!! out)]
-        (is (vector? result))
-        (is (= 2 (count result)))
-        (is (= [:ib/position :ib/position] (mapv :type result)))))))
+        (is (true? (:ok result)))
+        (is (= 2 (count (:positions result))))
+        (is (= [:ib/position :ib/position] (mapv :type (:positions result))))))))
 
 (deftest positions-snapshot-timeout-test
   (testing "returns timeout error object instead of hanging"
     (let [events (async/chan 1)
           out (positions/positions-snapshot-from-events! events {:timeout-ms 30})
           result (async/<!! out)]
-      (is (= :ib/error (:type result)))
-      (is (= :timeout (:reason result)))
+      (is (false? (:ok result)))
+      (is (= :timeout (:error result)))
       (is (= 30 (:timeout-ms result))))))
 
 (deftest positions-snapshot-stream-closed-test
@@ -39,8 +39,8 @@
           out (positions/positions-snapshot-from-events! events {:timeout-ms 500})]
       (async/close! events)
       (let [result (async/<!! out)]
-        (is (= :ib/error (:type result)))
-        (is (= :event-stream-closed (:reason result)))))))
+        (is (false? (:ok result)))
+        (is (= :event-stream-closed (:error result)))))))
 
 (deftest positions-snapshot-api-test
   (testing "positions-snapshot! returns collector result and unsubscribes"
@@ -48,7 +48,8 @@
           collector-out (async/chan 1)
           req-called? (atom false)
           unsub-called? (atom false)]
-      (async/>!! collector-out [{:type :ib/position :account "DU1"}])
+      (async/>!! collector-out {:ok true
+                                :positions [{:type :ib/position :account "DU1"}]})
       (async/close! collector-out)
       (with-redefs [ib.client/subscribe-events! (fn [_ _] sub-ch)
                     ib.client/req-positions! (fn [_] (reset! req-called? true) true)
@@ -58,7 +59,9 @@
               result (async/<!! out)]
           (is (true? @req-called?))
           (is (true? @unsub-called?))
-          (is (= [{:type :ib/position :account "DU1"}] result))))))
+          (is (= {:ok true
+                  :positions [{:type :ib/position :account "DU1"}]}
+                 (select-keys result [:ok :positions])))))))
 
   (testing "positions-snapshot! returns request-failed error"
     (let [sub-ch (async/chan 1)
@@ -71,6 +74,6 @@
                     ib.positions/positions-snapshot-from-events! (fn [_ _] collector-out)]
         (let [out (positions/positions-snapshot! {:dummy true} {:timeout-ms 200})
               result (async/<!! out)]
-          (is (= :ib/error (:type result)))
-          (is (= :request-failed (:reason result)))
+          (is (false? (:ok result)))
+          (is (= :request-failed (:error result)))
           (is (pos? @unsub-calls)))))))

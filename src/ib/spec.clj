@@ -41,7 +41,10 @@
 (s/def :ib/initial-delay-ms (s/and int? pos?))
 (s/def :ib/max-delay-ms (s/and int? pos?))
 (s/def :ib/ok boolean?)
+(s/def :ib/error keyword?)
 (s/def :ib/values map?)
+(s/def :ib/positions (s/coll-of :ib/event :kind vector?))
+(s/def :ib/contracts vector?)
 (s/def :ib/orders (s/coll-of :ib.result/open-order :kind vector?))
 (s/def :ib/account string?)
 (s/def :ib/subscribe? boolean?)
@@ -231,19 +234,35 @@
 
 (s/def :ib/event (s/multi-spec event-dispatch :type))
 
-(s/def :ib.result/positions-ok (s/coll-of :ib/event :kind vector?))
-(s/def :ib.result/error-map (s/and map? #(= :ib/error (:type %))))
+(s/def :ib.result/positions-ok
+  (s/and (s/keys :req-un [:ib/ok :ib/positions :ib.event/ts])
+         #(true? (:ok %))))
+(s/def :ib.result/error-map
+  (s/and (s/keys :req-un [:ib/ok :ib/error :ib.event/ts])
+         #(false? (:ok %))))
 (s/def :ib.result/positions-snapshot (s/or :ok :ib.result/positions-ok
                                            :error :ib.result/error-map))
 
 (s/def :ib.result/account-values map?)
 (s/def :ib.result/account-summary-ok
-  (s/and (s/keys :req-un [:ib/ok :ib/req-id :ib/values :ib.event/ts])
+  (s/and (s/keys :req-un [:ib/ok :ib/request-id :ib/values :ib.event/ts]
+                 :opt-un [:ib/req-id])
          #(true? (:ok %))))
 (s/def :ib.result/account-summary-error
   (s/and (s/keys :req-un [:ib/ok :ib.event/ts]
-                 :opt-un [:ib/req-id])
+                 :opt-un [:ib/request-id :ib/req-id])
          #(false? (:ok %))))
+(s/def :ib.result/contract-details-ok
+  (s/and (s/keys :req-un [:ib/ok :ib/request-id :ib/contracts :ib.event/ts]
+                 :opt-un [:ib/req-id])
+         #(true? (:ok %))))
+(s/def :ib.result/contract-details-error
+  (s/and (s/keys :req-un [:ib/ok :ib/error :ib.event/ts]
+                 :opt-un [:ib/request-id :ib/req-id])
+         #(false? (:ok %))))
+(s/def :ib.result/contract-details
+  (s/or :ok :ib.result/contract-details-ok
+        :error :ib.result/contract-details-error))
 (s/def :ib.result/account-summary
   (s/or :ok :ib.result/account-summary-ok
         :error :ib.result/account-summary-error))
@@ -408,6 +427,10 @@
   :args (s/cat :conn map?)
   :ret int?)
 
+(s/fdef ib.client/dropped-event-total
+  :args (s/cat :conn map?)
+  :ret int?)
+
 (s/fdef ib.open-orders/open-orders-snapshot!
   :args (s/or :arity-1 (s/cat :conn :ib.conn/with-open-orders-guard)
               :arity-2 (s/cat :conn :ib.conn/with-open-orders-guard :opts :ib.config/open-orders-snapshot-opts))
@@ -432,6 +455,7 @@
    #'ib.client/register-request!
    #'ib.client/unregister-request!
    #'ib.client/request-context
+   #'ib.client/dropped-event-total
    #'ib.client/dropped-event-count
    #'ib.open-orders/open-orders-snapshot!])
 

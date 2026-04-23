@@ -798,9 +798,14 @@
     (events/unsubscribe! events-mult ch))
   ch)
 
-(defn dropped-event-count
-  "Number of events that could not be enqueued (e.g. after channel closed)."
+(defn dropped-event-total
+  "Canonical diagnostic counter for events that could not be enqueued."
   [{:keys [dropped-events]}]
   (if dropped-events
     @dropped-events
     0))
+
+(defn ^:deprecated dropped-event-count
+  "Deprecated compatibility alias for `dropped-event-total`."
+  [conn]
+  (dropped-event-total conn))

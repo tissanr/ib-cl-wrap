@@ -5,6 +5,7 @@
   market data subscription is required for testing."
   (:require [clojure.core.async :as async]
             [ib.client :as client]
+            [ib.contract :as contract]
             [ib.events :as events]
             [clojure.string :as str]))
 
@@ -38,7 +39,7 @@
   - `:timeout-ms`  default 8000
 
   Returns a channel delivering one map:
-  - success: `{:ok true  :symbol ... :ticks {:bid ... :ask ... :last ...}}`
+  - success: `{:ok true  :request-id ... :symbol ... :ticks {:bid ... :ask ... :last ...}}`
   - error:   `{:ok false :error :timeout/:ib-error/:stream-closed ... }`"
   ([conn symbol]
    (market-data-snapshot! conn symbol {}))
@@ -65,7 +66,10 @@
        (if req-err
          (do
            (async/put! out {:ok false :error :request-failed
-                            :symbol symbol :message (.getMessage req-err)})
+                            :request-id rid
+                            :req-id rid
+                            :symbol symbol :message (.getMessage req-err)
+                            :ts (events/now-ms)})
            (async/close! out)
            (client/unsubscribe-events! conn sub-ch)
            (async/close! sub-ch))
@@ -76,27 +80,35 @@
                    (= port timeout-ch)
                    (do (client/cancel-mkt-data! conn rid)
                        (if (seq ticks)
-                         {:ok true  :symbol symbol :ticks ticks}
+                         {:ok true :request-id rid :req-id rid :symbol symbol :ticks ticks
+                          :ts (events/now-ms)}
                          {:ok false :error :timeout :symbol symbol
-                          :message "No tick data received before timeout"}))
+                          :request-id rid :req-id rid
+                          :message "No tick data received before timeout"
+                          :ts (events/now-ms)}))
 
                    (nil? val)
-                   {:ok false :error :stream-closed :symbol symbol}
+                   {:ok false :error :stream-closed :symbol symbol
+                    :request-id rid :req-id rid
+                    :ts (events/now-ms)}
 
                    (and (= :ib/tick-snapshot-end (:type val))
-                        (= rid (:req-id val)))
+                        (= rid (:request-id val)))
                    ;; IB auto-cancels snapshot subscriptions after tickSnapshotEnd,
                    ;; so cancelMktData here is redundant and causes a harmless
                    ;; "Can't find EId" warning. Swallow the error.
                    (do (try (client/cancel-mkt-data! conn rid) (catch Throwable _ nil))
-                       {:ok true :symbol symbol :ticks ticks})
+                       {:ok true :request-id rid :req-id rid :symbol symbol :ticks ticks
+                        :ts (events/now-ms)})
 
                    (and (= :ib/error (:type val))
                         (= rid (:request-id val)))
                    (when-not (delayed-data-notice? val)
                      (do (client/cancel-mkt-data! conn rid)
                          {:ok false :error :ib-error :symbol symbol
-                          :message (:message val) :code (:code val)}))
+                          :request-id rid :req-id rid
+                          :message (:message val) :code (:code val)
+                          :ts (events/now-ms)}))
 
                    :else nil)]
              (if done-result
@@ -107,15 +119,19 @@
                  (async/close! sub-ch))
                (let [new-ticks
                      (if (and (= :ib/tick-price (:type val))
-                              (= rid (:req-id val))
+                              (= rid (:request-id val))
                               (:field-key val))
                        (assoc ticks (:field-key val) (:price val))
                        ticks)]
                  (recur new-ticks)))))))
      out)))
 
-(defn contract-details-snapshot!
-  "Request contract details for one contract and return the first result.
+(defn ^:deprecated contract-details-snapshot!
+  "Deprecated compatibility wrapper around `ib.contract/contract-details-snapshot!`.
+
+  This preserves the old single-symbol calling convention and legacy result
+  shape during the Phase 2 transition. New code should call
+  `ib.contract/contract-details-snapshot!` directly.
 
   Options:
   - `:sec-type`   default `\"STK\"`
@@ -130,59 +146,54 @@
    (contract-details-snapshot! conn symbol {}))
   ([conn symbol {:keys [sec-type exchange currency timeout-ms]
                  :or {sec-type "STK" exchange "SMART" currency "USD" timeout-ms 8000}}]
-   (let [rid        (next-req-id!)
-         sub-ch     (client/subscribe-events! conn {:buffer-size 64})
-         out        (async/chan 1)
-         timeout-ch (async/timeout timeout-ms)]
-     (let [req-err (try
-                     (client/req-contract-details! conn {:req-id   rid
-                                                         :symbol   symbol
-                                                         :sec-type sec-type
-                                                         :exchange exchange
-                                                         :currency currency})
-                     nil
-                     (catch Throwable t t))]
-       (if req-err
-         (do
-           (async/put! out {:ok false :error :request-failed
-                            :symbol symbol :message (.getMessage req-err)})
-           (async/close! out)
-           (client/unsubscribe-events! conn sub-ch)
-           (async/close! sub-ch))
-         (async/go-loop [results []]
-           (let [[val port] (async/alts! [sub-ch timeout-ch])
-                 done-result
-                 (cond
-                   (= port timeout-ch)
-                   (if (seq results)
-                     {:ok true :symbol symbol :details (first results)}
-                     {:ok false :error :timeout :symbol symbol
-                      :message "No contract details received before timeout"})
+   (let [result-ch (contract/contract-details-snapshot!
+                    conn
+                    {:symbol symbol
+                     :sec-type sec-type
+                     :exchange exchange
+                     :currency currency}
+                    {:timeout-ms timeout-ms})
+         out (async/chan 1)]
+     (async/go
+       (when-let [result (async/<! result-ch)]
+         (async/>! out
+                   (let [contracts (:contracts result)]
+                     (cond
+                       (and (:ok result) (seq contracts))
+                       {:ok true
+                        :symbol symbol
+                        :request-id (:request-id result)
+                        :req-id (:req-id result)
+                        :details (first contracts)
+                        :ts (:ts result)}
 
-                   (nil? val)
-                   {:ok false :error :stream-closed :symbol symbol}
+                       (:ok result)
+                       {:ok false
+                        :error :no-results
+                        :symbol symbol
+                        :request-id (:request-id result)
+                        :req-id (:req-id result)
+                        :message "contractDetailsEnd received with no prior results"
+                        :ts (:ts result)}
 
-                   (and (= :ib/contract-details-end (:type val))
-                        (= rid (:req-id val)))
-                   (if (seq results)
-                     {:ok true :symbol symbol :details (first results)}
-                     {:ok false :error :no-results :symbol symbol
-                      :message "contractDetailsEnd received with no prior results"})
+                       :else
+                       (cond-> {:ok false
+                                :error (:error result)
+                                :symbol symbol
+                                :request-id (:request-id result)
+                                :req-id (:req-id result)
+                                :message (:message result)
+                                :ts (:ts result)}
+                         (= :ib-error (:error result))
+                         (assoc :code (get-in result [:ib-error :code])
+                                :message (get-in result [:ib-error :message]))
 
-                   (and (= :ib/error (:type val))
-                        (= rid (:request-id val)))
-                   {:ok false :error :ib-error :symbol symbol
-                    :message (:message val) :code (:code val)}
+                         (and (= :event-stream-closed (:error result))
+                              (nil? (:message result)))
+                         (assoc :message "Event stream closed before contract details completed")
 
-                   :else nil)]
-             (if done-result
-               (do
-                 (async/>! out done-result)
-                 (async/close! out)
-                 (client/unsubscribe-events! conn sub-ch)
-                 (async/close! sub-ch))
-               (recur (if (and (= :ib/contract-details (:type val))
-                               (= rid (:req-id val)))
-                        (conj results val)
-                        results)))))))
+                         (and (= :timeout (:error result))
+                              (nil? (:message result)))
+                         (assoc :message "No contract details received before timeout"))))))
+       (async/close! out))
      out)))

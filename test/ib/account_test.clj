@@ -10,26 +10,31 @@
                                                                      :timeout-ms 500})]
       (async/>!! events {:type :ib/account-summary
                          :req-id 999
+                         :request-id 999
                          :account "DU-OTHER"
                          :tag "NetLiquidation"
                          :value "1"
                          :currency "USD"})
       (async/>!! events {:type :ib/account-summary
                          :req-id 101
+                         :request-id 101
                          :account "DU111"
                          :tag "NetLiquidation"
                          :value "1000.0"
                          :currency "USD"})
       (async/>!! events {:type :ib/account-summary
                          :req-id 101
+                         :request-id 101
                          :account "DU111"
                          :tag "AvailableFunds"
                          :value "300.0"
                          :currency "USD"})
       (async/>!! events {:type :ib/account-summary-end
-                         :req-id 101})
+                         :req-id 101
+                         :request-id 101})
       (let [result (async/<!! out)]
         (is (true? (:ok result)))
+        (is (= 101 (:request-id result)))
         (is (= 101 (:req-id result)))
         (is (= "1000.0" (get-in result [:values "DU111" "NetLiquidation" :value])))
         (is (= "USD" (get-in result [:values "DU111" "AvailableFunds" :currency])))))))
@@ -42,6 +47,7 @@
           result (async/<!! out)]
       (is (false? (:ok result)))
       (is (= :timeout (:error result)))
+      (is (= 22 (:request-id result)))
       (is (= 22 (:req-id result)))))
 
   (testing "collector returns ib-error for matching req-id"
@@ -55,6 +61,7 @@
       (let [result (async/<!! out)]
         (is (false? (:ok result)))
         (is (= :ib-error (:error result)))
+        (is (= 33 (:request-id result)))
         (is (= 33 (:req-id result)))
         (is (true? (:retryable? result))))))
 
@@ -72,6 +79,7 @@
       (let [result (async/<!! out)]
         (is (false? (:ok result)))
         (is (= :ib-error (:error result)))
+        (is (= 44 (:request-id result)))
         (is (= 44 (:req-id result)))
         (is (true? (:retryable? result)))))))
 
@@ -93,6 +101,7 @@
               result (async/<!! out)]
           (is (false? (:ok result)))
           (is (= :timeout (:error result)))
+          (is (= 4242 (:request-id result)))
           (is (= 4242 (:req-id result)))
           (is (= [4242] @cancel-calls))
           (is (= 1 @unsub-calls)))))))
