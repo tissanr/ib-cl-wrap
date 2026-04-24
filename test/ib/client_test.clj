@@ -132,9 +132,9 @@
       (is (thrown? clojure.lang.ExceptionInfo
                    (client/subscribe-events! {}))))
 
-    (testing "dropped-event-count returns atom value and default zero"
-      (is (= 3 (client/dropped-event-count {:dropped-events (atom 3)})))
-      (is (= 0 (client/dropped-event-count {}))))))
+    (testing "dropped-event-total returns atom value and default zero"
+      (is (= 3 (client/dropped-event-total {:dropped-events (atom 3)})))
+      (is (= 0 (client/dropped-event-total {}))))))
 
 (deftest disconnect-test
   (testing "disconnect! emits disconnected marker and closes event channel"
@@ -205,7 +205,7 @@
       (is (thrown? clojure.lang.ExceptionInfo
                    (client/req-account-summary! {:client (atom c) :request-registry (atom {})} {:group "All"})))
       (is (thrown? clojure.lang.ExceptionInfo
-                   (client/cancel-account-summary! {:client (atom c) :request-registry (atom {})} nil)))))
+                   (client/cancel-account-summary! {:client (atom c) :request-registry (atom {})} nil))))))
 
 (deftest request-correlation-helpers-test
   (let [registry (atom {})
@@ -218,7 +218,7 @@
       (is (= :account-summary (get-in evt [:request :type])))
       (is (true? (:retryable? evt))))
     (client/unregister-request! conn 99)
-    (is (nil? (client/request-context conn 99))))))
+    (is (nil? (client/request-context conn 99)))))
 
 (deftest account-updates-req-cancel-test
   (testing "req-account-updates! subscribes account stream"

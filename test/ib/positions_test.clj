@@ -1,6 +1,7 @@
 (ns ib.positions-test
   (:require [clojure.core.async :as async]
             [clojure.test :refer [deftest is testing]]
+            [ib.client]
             [ib.positions :as positions]))
 
 (deftest positions-snapshot-success-test

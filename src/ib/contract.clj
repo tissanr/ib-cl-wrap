@@ -26,7 +26,7 @@
   - success: `{:ok true :request-id ... :contracts [...]}`
   - error:   `{:ok false :error :timeout/:event-stream-closed/:ib-error ...}`"
   [events-ch {:keys [req-id timeout-ms]
-               :or {timeout-ms default-timeout-ms}}]
+              :or {timeout-ms default-timeout-ms}}]
   (let [out (async/chan 1)
         timeout-ch (async/timeout timeout-ms)]
     (async/go-loop [contracts []]
@@ -104,7 +104,7 @@
    (let [rid (or req-id (next-req-id!))
          sub-ch (client/subscribe-events! conn {:buffer-size tap-buffer-size})
          collector-ch (contract-details-snapshot-from-events! sub-ch {:req-id rid
-                                                                       :timeout-ms timeout-ms})
+                                                                      :timeout-ms timeout-ms})
          out (async/chan 1)
          req-error (atom nil)]
      (try

@@ -456,7 +456,6 @@
    #'ib.client/unregister-request!
    #'ib.client/request-context
    #'ib.client/dropped-event-total
-   #'ib.client/dropped-event-count
    #'ib.open-orders/open-orders-snapshot!])
 
 (def experimental-public-api-vars
