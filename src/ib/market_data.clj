@@ -104,11 +104,11 @@
                    (and (= :ib/error (:type val))
                         (= rid (:request-id val)))
                    (when-not (delayed-data-notice? val)
-                     (do (client/cancel-mkt-data! conn rid)
-                         {:ok false :error :ib-error :symbol symbol
-                          :request-id rid :req-id rid
-                          :message (:message val) :code (:code val)
-                          :ts (events/now-ms)}))
+                     (client/cancel-mkt-data! conn rid)
+                     {:ok false :error :ib-error :symbol symbol
+                      :request-id rid :req-id rid
+                      :message (:message val) :code (:code val)
+                      :ts (events/now-ms)})
 
                    :else nil)]
              (if done-result

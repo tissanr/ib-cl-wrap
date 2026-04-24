@@ -2,6 +2,7 @@
   (:require [clojure.core.async :as async]
             [clojure.test :refer [deftest is testing]]
             [ib.contract]
+            [ib.client]
             [ib.market-data :as market-data]))
 
 (deftest delayed-data-notice-test
@@ -122,11 +123,11 @@
                              contract-opts))
                       (is (= {:timeout-ms 8000} opts))
                       result-ch)]
-        (let [result (async/<!! (market-data/contract-details-snapshot! {} "AAPL"))]
+        (let [compat-snapshot-fn (resolve 'ib.market-data/contract-details-snapshot!)]
           (is (= {:ok true
                   :symbol "AAPL"
                   :request-id 7001
                   :req-id 7001
                   :details {:contract {:conId 1 :symbol "AAPL"}}
                   :ts 111}
-                 result)))))))
+                 (async/<!! (compat-snapshot-fn {} "AAPL")))))))))

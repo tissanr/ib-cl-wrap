@@ -1,7 +1,8 @@
 (ns ib.account-test
   (:require [clojure.core.async :as async]
             [clojure.test :refer [deftest is testing]]
-            [ib.account :as account]))
+            [ib.account :as account]
+            [ib.client]))
 
 (deftest account-summary-collector-success-test
   (testing "collector aggregates matching req-id until account-summary-end"

@@ -1,6 +1,7 @@
 (ns ib.open-orders-test
   (:require [clojure.core.async :as async]
             [clojure.test :refer [deftest is testing]]
+            [ib.client]
             [ib.open-orders :as oo]))
 
 (deftest open-orders-snapshot-collector-success-test
